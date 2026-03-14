@@ -814,7 +814,17 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     # the bulk of the code is similar to both train-time batch normalization  #
     # and layer normalization!                                                #
     ###########################################################################
-    # 
+    #  
+    N, C, H, W = x.shape
+    x_group = x.reshape(N, G, C // G, H, W)
+    sample_group_mean = np.mean(x_group, axis = (2, 3, 4)).reshape(N, G, 1, 1, 1)
+    sample_group_var = np.var(x_group, axis = (2, 3, 4)).reshape(N, G, 1, 1, 1)
+    sample_group_std = np.sqrt(sample_group_var + eps)
+
+    x_group_norm = (x_group - sample_group_mean) / sample_group_std # (N, G, C // G, H, W)
+    x_norm = x_group_norm.reshape(x.shape) # (N, C, H, W)
+    out = x_norm * gamma + beta
+    cache = (x_group_norm, x_norm, gamma, sample_group_std)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -834,12 +844,20 @@ def spatial_groupnorm_backward(dout, cache):
     - dbeta: Gradient with respect to shift parameter, of shape (1, C, 1, 1)
     """
     dx, dgamma, dbeta = None, None, None
-
+    x_group_norm, x_norm, gamma, sample_group_std = cache
+    N, C, H, W = dout.shape
     ###########################################################################
     # TODO: Implement the backward pass for spatial group normalization.      #
     # This will be extremely similar to the layer norm implementation.        #
     ###########################################################################
     # 
+    dgamma = np.sum(dout * x_norm, axis = (0, 2, 3)).reshape(1, C, 1, 1)
+    dbeta = np.sum(dout, axis = (0, 2, 3)).reshape(1, C, 1, 1)
+    
+    dout_group = (dout * gamma).reshape(x_group_norm.shape)
+    dx_group = (dout_group - np.mean(dout_group, axis = (2, 3, 4), keepdims=True) - x_group_norm * np.mean(dout_group * x_group_norm, axis = (2, 3, 4), keepdims=True)) / sample_group_std
+    dx = dx_group.reshape(x_norm.shape)
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
