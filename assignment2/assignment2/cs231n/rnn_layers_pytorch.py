@@ -44,6 +44,7 @@ def rnn_step_forward(x, prev_h, Wx, Wh, b):
     # TODO: Implement a single forward step for the vanilla RNN.                 #
     ##############################################################################
     # 
+    next_h = torch.tanh(x @ Wx + prev_h @ Wh + b)
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -74,6 +75,16 @@ def rnn_forward(x, h0, Wx, Wh, b):
     # above. You can use a for loop to help compute the forward pass.            #
     ##############################################################################
     # 
+    N, T, _ = x.shape
+    # tensor 不允许被原地修改，因此先用 list 存储，最后再统一为张量形式
+    h_list = []
+    prev_h = h0
+    for i in range(T):
+        time_step_x = x[:, i, :]
+        next_h = rnn_step_forward(time_step_x, prev_h, Wx, Wh, b)
+        h_list.append(next_h)
+        prev_h = next_h
+    h = torch.stack(h_list, dim=1) # dim = 1 ：堆叠时间维度
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -102,6 +113,7 @@ def word_embedding_forward(x, W):
     # HINT: This can be done in one line using Pytorch's array indexing.         #
     ##############################################################################
     # 
+    out = W[x]
     ##############################################################################
     #                               END OF YOUR CODE                             #
     ##############################################################################
@@ -224,7 +236,7 @@ def temporal_softmax_loss(x, y, mask, verbose=False):
     N, T, V = x.shape
 
     x_flat = x.reshape(N * T, V)
-    y_flat = y.reshape(N * T)
+    y_flat = y.reshape(N * T).long()
     mask_flat = mask.reshape(N * T)
 
     loss = torch.nn.functional.cross_entropy(x_flat, y_flat, reduction='none')

@@ -107,9 +107,11 @@ class CaptioningRNN:
         # Weight and bias for the affine transform from image features to initial
         # hidden state
         W_proj, b_proj = self.params["W_proj"], self.params["b_proj"]
+        # W_proj: (D, H) b_proj: (H, )
 
         # Word embedding matrix
         W_embed = self.params["W_embed"]
+        # W_embed: (V, W)
 
         # Input-to-hidden, hidden-to-hidden, and biases for the RNN
         Wx, Wh, b = self.params["Wx"], self.params["Wh"], self.params["b"]
@@ -139,6 +141,12 @@ class CaptioningRNN:
         # You also don't have to implement the backward pass.                      #
         ############################################################################
         # 
+        hidden_state_initial = features @ W_proj + b_proj  # (N, H)
+        word_vectors = word_embedding_forward(captions_in, W_embed)  # (N, T, W)
+        if self.cell_type == "rnn":
+            hidden_state_vector = rnn_forward(word_vectors, hidden_state_initial, Wx, Wh, b)  # (N, T, H)
+            affine_out = temporal_affine_forward(hidden_state_vector, W_vocab, b_vocab)  # (N, T, V)
+            loss = temporal_softmax_loss(affine_out, captions_out, mask)
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -203,6 +211,19 @@ class CaptioningRNN:
         # you are using an LSTM, initialize the first cell state to zeros.        #
         ###########################################################################
         # 
+        word = self._start * torch.ones(N, dtype=torch.long)
+        prev_h = affine_forward(features, W_proj, b_proj)
+
+        if self.cell_type == "rnn":
+            for i in range(max_length):
+                word_vector = W_embed[word]
+                hidden_state = rnn_step_forward(word_vector, prev_h, Wx, Wh, b)
+                out = hidden_state @ W_vocab + b_vocab
+                next_word = torch.argmax(out, dim=1)
+                captions[:, i] = next_word
+                word = next_word
+                prev_h = hidden_state
+
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
